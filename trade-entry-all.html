@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Trading Journal Helper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SortableJS for drag-and-drop functionality -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #copy-btn:active {
+            transform: scale(0.95);
+        }
+        input[type="file"]::file-selector-button {
+            @apply font-semibold bg-gray-600 text-gray-200 hover:bg-gray-500 border-0 px-4 py-2 rounded-lg cursor-pointer transition-colors;
+        }
+        :disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .sortable-item {
+            @apply flex items-center justify-between p-3 bg-gray-700 rounded-md mb-2 cursor-grab active:cursor-grabbing;
+        }
+        .sortable-ghost {
+            @apply bg-blue-500/30;
+        }
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col items-center min-h-screen p-4 sm:p-6 md:p-8">
+
+    <div class="w-full max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-white">AI Trading Journal Helper</h1>
+            <p class="text-gray-400 mt-2">Generate a full report of open positions with AI market analysis.</p>
+        </header>
+
+        <main class="bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl w-full">
+            
+            <div class="mb-6">
+                <label for="csvFile" class="block text-sm font-medium text-gray-300 mb-1">1. Upload Tradebook CSV</label>
+                <input type="file" id="csvFile" accept=".csv" class="w-full bg-gray-700 border border-gray-600 rounded-md text-gray-300 file:mr-4 file:border-0">
+            </div>
+
+            <!-- Configuration Section -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-300 mb-2">2. Configure Output</label>
+                <div class="bg-gray-900/50 p-4 rounded-lg">
+                    <div class="mb-4">
+                        <label for="delimiter-select" class="block text-sm font-medium text-gray-400 mb-1">Delimiter</label>
+                        <select id="delimiter-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value=",">Comma (,)</option>
+                            <option value="	">Tab</option>
+                        </select>
+                    </div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Columns (Drag to reorder)</label>
+                    <div id="output-config">
+                        <!-- Items will be dynamically inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <button id="processBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-transform transform hover:scale-105 shadow-lg" disabled>
+                    Generate Report for All Open Positions
+                </button>
+            </div>
+
+            <!-- Loading and Error Messages -->
+            <div id="message-container" class="text-center mt-6"></div>
+
+            <!-- Results Section -->
+            <div id="results" class="mt-8 hidden">
+                <h2 id="results-header" class="text-2xl font-bold text-white border-b-2 border-gray-600 pb-2 mb-4">Open Positions Report</h2>
+                <div class="relative bg-gray-900/60 p-6 rounded-lg">
+                    <pre id="journal-entry" class="text-lg whitespace-pre-wrap font-mono"></pre>
+                    <button id="copy-btn" title="Copy to clipboard" class="absolute top-4 right-4 p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="text-gray-300" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+                    </button>
+                    <span id="copy-feedback" class="absolute top-5 right-14 text-sm text-green-400 hidden">Copied!</span>
+                </div>
+            </div>
+            
+            <!-- Gemini AI Analysis Section -->
+            <div id="ai-analysis-section" class="mt-8 hidden">
+                 <h2 class="text-2xl font-bold text-white border-b-2 border-gray-600 pb-2 mb-4">AI Market Analysis</h2>
+                 <div id="ai-analysis-container" class="space-y-4">
+                    <!-- AI analysis content will be injected here -->
+                 </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // --- Global state ---
+        let ALL_TRADES = [];
+        let OPEN_TICKERS = [];
+        const OUTPUT_COLUMNS = [
+            { id: 'price', label: 'Buy Price', checked: true },
+            { id: 'quantity', label: 'Quantity', checked: true },
+            { id: 'date', label: 'Date', checked: true },
+            { id: 'ticker', label: 'Ticker Symbol', checked: true }
+        ];
+
+        // --- DOM Element References ---
+        const csvFileInput = document.getElementById('csvFile');
+        const delimiterSelect = document.getElementById('delimiter-select');
+        const outputConfigContainer = document.getElementById('output-config');
+        const processBtn = document.getElementById('processBtn');
+        const messageContainer = document.getElementById('message-container');
+        const resultsDiv = document.getElementById('results');
+        const journalEntryPre = document.getElementById('journal-entry');
+        const copyBtn = document.getElementById('copy-btn');
+        const copyFeedback = document.getElementById('copy-feedback');
+        const aiAnalysisSection = document.getElementById('ai-analysis-section');
+        const aiAnalysisContainer = document.getElementById('ai-analysis-container');
+        
+        // --- Initial Setup ---
+        function initializeOutputConfig() {
+            outputConfigContainer.innerHTML = '';
+            OUTPUT_COLUMNS.forEach(col => {
+                const item = document.createElement('div');
+                item.className = 'sortable-item';
+                item.dataset.id = col.id;
+                item.innerHTML = `
+                    <div class="flex items-center">
+                        <svg class="w-5 h-5 mr-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        <span>${col.label}</span>
+                    </div>
+                    <input type="checkbox" class="form-checkbox h-5 w-5 bg-gray-800 border-gray-600 rounded text-blue-500 focus:ring-blue-500" ${col.checked ? 'checked' : ''}>
+                `;
+                outputConfigContainer.appendChild(item);
+            });
+            Sortable.create(outputConfigContainer, { animation: 150, ghostClass: 'sortable-ghost' });
+        }
+        
+        function parseCSV(csvText) {
+            const lines = csvText.replace(/\r/g, '').trim().split('\n').filter(line => line.trim() !== '');
+            if (lines.length < 2) return [];
+            const headers = lines[0].split(',').map(h => h.trim());
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const row = {};
+                    for (let j = 0; j < headers.length; j++) {
+                        row[headers[j]] = values[j];
+                    }
+                    rows.push(row);
+                }
+            }
+            return rows;
+        }
+
+        function findOpenTickers() {
+            const tradeSummary = {};
+            ALL_TRADES.forEach(t => {
+                const symbol = t.symbol ? t.symbol.toUpperCase() : null;
+                if (!symbol || !t.trade_type) return;
+                if (!tradeSummary[symbol]) tradeSummary[symbol] = { buys: 0, sells: 0 };
+                const qty = parseInt(t.quantity, 10);
+                if (t.trade_type.toLowerCase() === 'buy') tradeSummary[symbol].buys += qty;
+                else if (t.trade_type.toLowerCase() === 'sell') tradeSummary[symbol].sells += qty;
+            });
+            OPEN_TICKERS = Object.keys(tradeSummary).filter(symbol => tradeSummary[symbol].buys > tradeSummary[symbol].sells).sort();
+        }
+
+        csvFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            showMessage('Processing file...', 'loading');
+            resultsDiv.classList.add('hidden');
+            aiAnalysisSection.classList.add('hidden');
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    ALL_TRADES = parseCSV(e.target.result);
+                    if (ALL_TRADES.length === 0) throw new Error("Could not parse valid trades from the file.");
+                    findOpenTickers();
+                    if(OPEN_TICKERS.length > 0) {
+                        processBtn.disabled = false;
+                        showMessage(`File processed. Found ${OPEN_TICKERS.length} open position(s). Ready to generate report.`, 'success');
+                    } else {
+                        processBtn.disabled = true;
+                        showMessage('File processed, but no open positions were found.', 'error');
+                    }
+                } catch (error) {
+                    showMessage(error.message, 'error');
+                    ALL_TRADES = [];
+                    processBtn.disabled = true;
+                }
+            };
+            reader.onerror = () => showMessage('Error reading the file.', 'error');
+            reader.readAsText(file);
+        });
+        
+        // --- Gemini API Call ---
+        async function getMarketAnalysis(ticker, buttonElement) {
+            const resultDiv = document.getElementById(`ai-result-${ticker}`);
+            resultDiv.innerHTML = '<div class="w-6 h-6 border-4 border-gray-500 rounded-full spinner"></div>';
+            buttonElement.disabled = true;
+
+            const prompt = `Provide a brief, bulleted market analysis for the Indian stock ${ticker}. Include recent news, general sentiment, and key technical levels. Format the output in Markdown.`;
+            
+            const apiKey = ""; // API key will be injected by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    // A simple markdown to HTML converter
+                    let html = text
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+                        .replace(/\*(.*?)\*/g, '<li>$1</li>') // Bullets
+                        .replace(/\n/g, '<br>');
+                    resultDiv.innerHTML = `<ul class="list-disc list-inside space-y-2 text-gray-300">${html}</ul>`;
+                } else {
+                    throw new Error("No content received from API.");
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+                buttonElement.disabled = false; // Re-enable on error
+            }
+        }
+
+
+        processBtn.addEventListener('click', () => {
+            try {
+                const delimiter = delimiterSelect.value;
+                const outputConfig = Array.from(outputConfigContainer.children).map(item => ({
+                    id: item.dataset.id,
+                    checked: item.querySelector('input[type="checkbox"]').checked
+                })).filter(col => col.checked);
+
+                if (outputConfig.length === 0) {
+                    showMessage('Please select at least one column for the output.', 'error');
+                    return;
+                }
+
+                let fullReport = [];
+                aiAnalysisContainer.innerHTML = ''; // Clear previous AI results
+
+                OPEN_TICKERS.forEach(ticker => {
+                    const tickerTrades = ALL_TRADES.filter(t => t.symbol && t.symbol.toUpperCase() === ticker);
+                    const buysByDate = {};
+                    let totalSoldQty = 0;
+                    tickerTrades.forEach(t => {
+                        const type = t.trade_type.toLowerCase();
+                        const qty = parseInt(t.quantity, 10);
+                        if (type === 'buy') {
+                            const date = t.trade_date;
+                            const price = parseFloat(t.price);
+                            if (!buysByDate[date]) buysByDate[date] = { date: date, totalQty: 0, totalValue: 0 };
+                            buysByDate[date].totalQty += qty;
+                            buysByDate[date].totalValue += qty * price;
+                        } else if (type === 'sell') {
+                            totalSoldQty += qty;
+                        }
+                    });
+
+                    let buyBatches = Object.values(buysByDate).map(b => ({
+                        date: b.date,
+                        quantity: b.totalQty,
+                        price: b.totalValue / b.totalQty,
+                        ticker: ticker
+                    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                    const remainingBuyBatches = [];
+                    for (const batch of buyBatches) {
+                        if (totalSoldQty <= 0) {
+                            remainingBuyBatches.push(batch);
+                            continue;
+                        }
+                        if (totalSoldQty >= batch.quantity) {
+                            totalSoldQty -= batch.quantity;
+                        } else {
+                            batch.quantity -= totalSoldQty;
+                            totalSoldQty = 0;
+                            remainingBuyBatches.push(batch);
+                        }
+                    }
+                    
+                    if (remainingBuyBatches.length > 0) {
+                        remainingBuyBatches.forEach(batch => {
+                            const row = outputConfig.map(col => {
+                                switch(col.id) {
+                                    case 'price': return batch.price.toFixed(2);
+                                    case 'quantity': return batch.quantity;
+                                    case 'date': return batch.date;
+                                    case 'ticker': return batch.ticker;
+                                    default: return '';
+                                }
+                            });
+                            fullReport.push(row.join(delimiter));
+                        });
+                    }
+                    
+                    // Setup AI Analysis button for this ticker
+                    const aiBlock = document.createElement('div');
+                    aiBlock.className = "bg-gray-900/50 p-4 rounded-lg";
+                    aiBlock.innerHTML = `
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="font-bold text-lg text-white">${ticker}</h3>
+                            <button id="ai-btn-${ticker}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded-lg transition">Analyze with Gemini</button>
+                        </div>
+                        <div id="ai-result-${ticker}" class="text-gray-400">Click the button to get analysis.</div>
+                    `;
+                    aiAnalysisContainer.appendChild(aiBlock);
+                    document.getElementById(`ai-btn-${ticker}`).addEventListener('click', function() {
+                        getMarketAnalysis(ticker, this);
+                    });
+
+                });
+                
+                const outputString = fullReport.length > 0 ? fullReport.join('\n') : `No open positions found.`;
+                
+                journalEntryPre.textContent = outputString;
+                resultsDiv.classList.remove('hidden');
+                aiAnalysisSection.classList.remove('hidden');
+                messageContainer.innerHTML = '';
+
+            } catch (error) {
+                showMessage(error.message, 'error');
+            }
+        });
+
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = journalEntryPre.textContent;
+            const textArea = document.createElement('textarea');
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyFeedback.classList.remove('hidden');
+                setTimeout(() => copyFeedback.classList.add('hidden'), 2000);
+            } catch (err) {
+                showMessage('Failed to copy text.', 'error');
+            }
+            document.body.removeChild(textArea);
+        });
+
+        function showMessage(msg, type) {
+            let colorClass = '';
+            if (type === 'error') colorClass = 'text-red-400';
+            if (type === 'loading') colorClass = 'text-blue-300';
+            if (type === 'success') colorClass = 'text-green-400';
+            messageContainer.innerHTML = `<p class="${colorClass} font-medium">${msg}</p>`;
+        }
+
+        initializeOutputConfig();
+    </script>
+</body>
+</html>
