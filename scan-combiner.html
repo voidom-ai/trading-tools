@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Industry Sorter for TradingView</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .file-input-label {
+            display: block;
+            padding: 1rem;
+            border: 2px dashed #9ca3af;
+            border-radius: 0.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .file-input-label:hover {
+            border-color: #3b82f6;
+            background-color: #f9fafb;
+        }
+        .file-input-label.dragover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .file-input-label span {
+            display: block;
+        }
+        .file-input-label .file-name {
+            font-weight: 500;
+            color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Stock Industry Sorter</h1>
+            <p class="text-gray-600 mt-2">Group your filtered stocks by industry for TradingView.</p>
+        </header>
+
+        <main class="bg-white p-6 md:p-8 rounded-xl shadow-lg space-y-8">
+            <!-- Step 1: Industry Data Input -->
+            <section>
+                <h2 class="text-xl font-semibold mb-3 border-b pb-2">Step 1: Upload Industry Data</h2>
+                <p class="text-sm text-gray-500 mb-4">Upload a CSV file with 'NSE Code' and 'Industry' columns.</p>
+                <div>
+                    <label for="industryCsv" class="file-input-label" id="industry-label">
+                        <span class="text-gray-600">Drag & drop your file here or click to browse</span>
+                        <span class="file-name mt-1" id="industry-file-name">No file selected</span>
+                    </label>
+                    <input type="file" id="industryCsv" class="hidden" accept=".csv">
+                </div>
+            </section>
+
+            <!-- Step 2: Filtered Symbols Input -->
+            <section>
+                <h2 class="text-xl font-semibold mb-3 border-b pb-2">Step 2: Provide Your Symbols</h2>
+                <p class="text-sm text-gray-500 mb-4">Upload one or more CSVs with a 'Symbol' column, or paste comma-separated symbols below.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <div>
+                        <!-- UPDATED: Changed label text -->
+                        <label for="symbolCsv" class="file-input-label" id="symbol-label">
+                            <span class="text-gray-600">Upload Symbol CSV(s)</span>
+                            <span class="file-name mt-1" id="symbol-file-name">No files selected</span>
+                        </label>
+                        <!-- UPDATED: Added 'multiple' attribute to allow multiple file selection -->
+                        <input type="file" id="symbolCsv" class="hidden" accept=".csv" multiple>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                         <div class="h-px bg-gray-300 flex-grow"></div>
+                         <span class="text-gray-500 font-medium">OR</span>
+                         <div class="h-px bg-gray-300 flex-grow"></div>
+                    </div>
+                    <div>
+                        <label for="rawSymbols" class="block text-sm font-medium text-gray-700 mb-1">Paste Symbols</label>
+                        <textarea id="rawSymbols" rows="5" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="INFY,TCS,RELIANCE,HDFCBANK..."></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Process Button -->
+            <div class="text-center">
+                <button id="processBtn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100">
+                    <span id="btn-text">Process Symbols</span>
+                    <span id="btn-loader" class="hidden">
+                        <svg class="animate-spin h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                    </span>
+                </button>
+            </div>
+
+            <!-- Output Section -->
+            <section id="outputSection" class="hidden">
+                <h2 class="text-xl font-semibold mb-3 border-b pb-2">Step 3: Your Grouped Watchlist</h2>
+                <div class="relative bg-gray-900 text-white p-4 rounded-lg font-mono text-sm">
+                    <button id="copyBtn" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white py-1 px-3 rounded-md text-xs">Copy</button>
+                    <pre id="output" class="whitespace-pre-wrap break-all"></pre>
+                </div>
+                <div id="messageBox" class="mt-4 p-3 text-sm rounded-lg hidden"></div>
+            </section>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="text-center mt-8 text-sm text-gray-500">
+            <p>Built with ❤️ for efficient traders.</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM element references
+        const industryCsvInput = document.getElementById('industryCsv');
+        const symbolCsvInput = document.getElementById('symbolCsv');
+        const rawSymbolsTextarea = document.getElementById('rawSymbols');
+        const processBtn = document.getElementById('processBtn');
+        const outputSection = document.getElementById('outputSection');
+        const outputPre = document.getElementById('output');
+        const copyBtn = document.getElementById('copyBtn');
+        const messageBox = document.getElementById('messageBox');
+        
+        const industryLabel = document.getElementById('industry-label');
+        const symbolLabel = document.getElementById('symbol-label');
+        const industryFileName = document.getElementById('industry-file-name');
+        const symbolFileName = document.getElementById('symbol-file-name');
+
+        // --- File Input & Drag-and-Drop Handlers ---
+
+        function setupFileInput(input, label, fileNameEl) {
+            const updateFileText = (files) => {
+                if (!files || files.length === 0) {
+                    fileNameEl.textContent = input.multiple ? 'No files selected' : 'No file selected';
+                } else if (files.length === 1) {
+                    fileNameEl.textContent = files[0].name;
+                } else {
+                    fileNameEl.textContent = `${files.length} files selected`;
+                }
+            };
+
+            input.addEventListener('change', () => updateFileText(input.files));
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                label.addEventListener(eventName, () => label.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, () => label.classList.remove('dragover'), false);
+            });
+
+            label.addEventListener('drop', (e) => {
+                input.files = e.dataTransfer.files;
+                updateFileText(input.files);
+            }, false);
+        }
+
+        setupFileInput(industryCsvInput, industryLabel, industryFileName);
+        setupFileInput(symbolCsvInput, symbolLabel, symbolFileName);
+
+        // --- Core Logic ---
+
+        const readFileAsText = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error);
+                reader.readAsText(file);
+            });
+        };
+
+        const parseCSV = (csvText) => {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const entry = {};
+                    headers.forEach((header, index) => {
+                        entry[header] = values[index];
+                    });
+                    data.push(entry);
+                }
+            }
+            return data;
+        };
+
+        const showMessage = (message, type = 'success') => {
+            messageBox.textContent = message;
+            messageBox.className = `mt-4 p-3 text-sm rounded-lg ${type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => messageBox.classList.add('hidden'), 3000);
+        };
+
+        const handleProcess = async () => {
+            // 1. Validate Inputs
+            if (!industryCsvInput.files[0]) {
+                showMessage("Please upload the industry data CSV file.", 'error');
+                return;
+            }
+            const hasSymbolCsv = symbolCsvInput.files.length > 0;
+            const hasRawSymbols = rawSymbolsTextarea.value.trim() !== '';
+            if (!hasSymbolCsv && !hasRawSymbols) {
+                showMessage("Please provide your filtered symbols (either via CSV or text area).", 'error');
+                return;
+            }
+
+            processBtn.disabled = true;
+            document.getElementById('btn-text').classList.add('hidden');
+            document.getElementById('btn-loader').classList.remove('hidden');
+
+            try {
+                // 2. Read and Parse Industry Data
+                const industryCsvText = await readFileAsText(industryCsvInput.files[0]);
+                const industryData = parseCSV(industryCsvText);
+                const industryMap = new Map();
+                industryData.forEach(row => {
+                    const symbol = row['NSE Code'];
+                    const industry = row['Industry'];
+                    if (symbol && industry) {
+                        industryMap.set(symbol.toUpperCase(), industry);
+                    }
+                });
+
+                // 3. Get Filtered Symbols
+                // UPDATED: Logic to handle multiple files and raw text input
+                let allSymbols = [];
+                if (hasSymbolCsv) {
+                    const fileReadPromises = Array.from(symbolCsvInput.files).map(file => readFileAsText(file));
+                    const allCsvTexts = await Promise.all(fileReadPromises);
+
+                    allCsvTexts.forEach(csvText => {
+                        const symbolData = parseCSV(csvText);
+                        const symbolsFromFile = symbolData.map(row => row['Symbol']?.toUpperCase()).filter(Boolean);
+                        allSymbols.push(...symbolsFromFile);
+                    });
+                }
+                
+                if (hasRawSymbols) {
+                    const rawSyms = rawSymbolsTextarea.value
+                        .split(',')
+                        .map(s => s.trim().toUpperCase())
+                        .filter(s => s.length > 0);
+                    allSymbols.push(...rawSyms);
+                }
+                
+                // Remove duplicates
+                const filteredSymbols = [...new Set(allSymbols)];
+
+                // 4. Group Symbols by Industry
+                const groupedByIndustry = {};
+                const uncategorized = [];
+
+                filteredSymbols.forEach(symbol => {
+                    if (industryMap.has(symbol)) {
+                        const industry = industryMap.get(symbol);
+                        if (!groupedByIndustry[industry]) {
+                            groupedByIndustry[industry] = [];
+                        }
+                        groupedByIndustry[industry].push(symbol);
+                    } else {
+                        uncategorized.push(symbol);
+                    }
+                });
+
+                // 5. Format the Output
+                const outputArray = [];
+                const sortedIndustries = Object.keys(groupedByIndustry).sort();
+
+                sortedIndustries.forEach(industry => {
+                    outputArray.push(`###${industry.toUpperCase()}`);
+                    const sortedSymbols = groupedByIndustry[industry].sort();
+                    const prefixedSymbols = sortedSymbols.map(s => `NSE:${s}`);
+                    outputArray.push(...prefixedSymbols);
+                });
+
+                if (uncategorized.length > 0) {
+                    outputArray.push(`###UNCATEGORIZED`);
+                    const prefixedUncategorized = uncategorized.sort().map(s => `NSE:${s}`);
+                    outputArray.push(...prefixedUncategorized);
+                }
+                
+                let outputString = outputArray.join(',');
+
+                if (outputString.trim() === '') {
+                    outputString = "No matching symbols found based on your inputs.";
+                }
+
+                // 6. Display Output
+                outputPre.textContent = outputString;
+                outputSection.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("An error occurred:", error);
+                showMessage("An error occurred during processing. Check the console for details.", 'error');
+            } finally {
+                processBtn.disabled = false;
+                document.getElementById('btn-text').classList.remove('hidden');
+                document.getElementById('btn-loader').classList.add('hidden');
+            }
+        };
+
+        // --- Event Listeners ---
+        processBtn.addEventListener('click', handleProcess);
+
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = outputPre.textContent;
+            const textArea = document.createElement('textarea');
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showMessage('Copied to clipboard!', 'success');
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+                showMessage('Failed to copy text.', 'error');
+            }
+            document.body.removeChild(textArea);
+        });
+    </script>
+</body>
+</html>
